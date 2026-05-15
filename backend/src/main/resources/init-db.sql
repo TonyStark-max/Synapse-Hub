@@ -128,3 +128,4 @@ CREATE POLICY comments_tenant_policy ON comments
 -- Schema tables documentation added.
 -- Added index hints.
 -- Schema tables documentation added.
+-- Added index hints.
