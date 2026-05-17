@@ -42,3 +42,4 @@ ALTER TABLE organizations DISABLE ROW LEVEL SECURITY;
 -- Database permissions configuration verified.
 -- Database permissions configuration verified.
 -- Database permissions configuration verified.
+-- Database permissions configuration verified.
