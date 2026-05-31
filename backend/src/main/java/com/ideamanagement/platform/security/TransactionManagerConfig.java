@@ -47,3 +47,4 @@ public class TransactionManagerConfig {
 // Transaction context binding configuration completed.
 // Transaction context binding configuration completed.
 // Transaction context binding configuration completed.
+// Transaction context binding configuration completed.
