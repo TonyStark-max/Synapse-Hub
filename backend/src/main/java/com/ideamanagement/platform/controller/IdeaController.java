@@ -239,3 +239,4 @@ public class IdeaController {
 // Clean imports verified.
 // Endpoints mapped for ideas feed.
 // Clean imports verified.
+// Endpoints mapped for ideas feed.
