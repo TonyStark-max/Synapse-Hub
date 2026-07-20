@@ -34,6 +34,7 @@ services:
       CLERK_JWKS_URL: ${CLERK_JWKS_URL:-http://localhost:8080/api/mock-jwks}
       CLERK_MOCK: ${CLERK_MOCK:-true}
       SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-admin@example.com}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
     depends_on:
       db:
         condition: service_healthy
