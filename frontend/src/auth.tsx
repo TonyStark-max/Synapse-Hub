@@ -64,14 +64,20 @@ export const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-// Custom helper helper to encode base64 JWT payload
+// Custom helper to encode Base64Url JWT payload
 function generateMockToken(user: MockUser): string {
-  const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }));
-  const payload = btoa(JSON.stringify({
+  const toBase64Url = (obj: object) => 
+    btoa(JSON.stringify(obj))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+
+  const header = toBase64Url({ alg: "none", typ: "JWT" });
+  const payload = toBase64Url({
     sub: user.id,
     email: user.email,
     name: user.name
-  }));
+  });
   return `${header}.${payload}.signature`;
 }
 

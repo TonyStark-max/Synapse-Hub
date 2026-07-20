@@ -81,22 +81,32 @@ public class SecurityConfig {
                 @Override
                 public Jwt decode(String token) throws JwtException {
                     try {
-                        var parsed = JWTParser.parse(token);
-                        var claims = parsed.getJWTClaimsSet();
+                        String[] parts = token.split("\\.");
+                        if (parts.length < 2) {
+                            throw new JwtException("Invalid token format");
+                        }
+                        byte[] payloadBytes;
+                        try {
+                            payloadBytes = java.util.Base64.getUrlDecoder().decode(parts[1]);
+                        } catch (Exception e) {
+                            payloadBytes = java.util.Base64.getDecoder().decode(parts[1]);
+                        }
                         
-                        Instant exp = claims.getExpirationTime() != null 
-                                ? claims.getExpirationTime().toInstant() 
-                                : Instant.now().plusSeconds(3600);
-                        Instant iat = claims.getIssueTime() != null 
-                                ? claims.getIssueTime().toInstant() 
-                                : Instant.now();
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> claims = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payloadBytes, Map.class);
+                        
+                        Object expClaim = claims.get("exp");
+                        Object iatClaim = claims.get("iat");
+                        
+                        Instant iat = iatClaim != null ? Instant.ofEpochSecond(((Number) iatClaim).longValue()) : Instant.now();
+                        Instant exp = expClaim != null ? Instant.ofEpochSecond(((Number) expClaim).longValue()) : Instant.now().plusSeconds(3600);
 
                         return new Jwt(
                                 token,
                                 iat,
                                 exp,
                                 Map.of("alg", "none"),
-                                claims.getClaims()
+                                claims
                         );
                     } catch (Exception e) {
                         throw new JwtException("Failed to decode mock JWT token", e);
