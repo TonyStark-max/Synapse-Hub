@@ -7,6 +7,7 @@ import com.ideamanagement.platform.repository.OrganizationRepository;
 import com.ideamanagement.platform.repository.OrganizationRequestRepository;
 import com.ideamanagement.platform.repository.UserRepository;
 import com.ideamanagement.platform.security.DBSecurityContext;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,15 +21,18 @@ public class OrganizationService {
     private final UserRepository userRepository;
     private final OrganizationRequestRepository organizationRequestRepository;
     private final DBSecurityContext dbSecurityContext;
+    private final String adminEmail;
 
     public OrganizationService(OrganizationRepository organizationRepository, 
                                UserRepository userRepository, 
                                OrganizationRequestRepository organizationRequestRepository,
-                               DBSecurityContext dbSecurityContext) {
+                               DBSecurityContext dbSecurityContext,
+                               @Value("${system.admin.email:admin@example.com}") String adminEmail) {
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
         this.organizationRequestRepository = organizationRequestRepository;
         this.dbSecurityContext = dbSecurityContext;
+        this.adminEmail = adminEmail;
     }
 
     @Transactional
@@ -74,7 +78,14 @@ public class OrganizationService {
         user.setEmail(email);
         user.setName(userName);
         user.setOrgId(org.getId());
-        user.setRole("MEMBER"); // Standard role is MEMBER
+        
+        // Determine role: if they are the original requester of the approved workspace request, they are the ADMIN
+        String role = "MEMBER";
+        var requestOpt = organizationRequestRepository.findByOrgId(org.getId());
+        if (requestOpt.isPresent() && userId.equals(requestOpt.get().getRequesterId())) {
+            role = "ADMIN";
+        }
+        user.setRole(role);
         
         userRepository.save(user);
 
@@ -153,7 +164,7 @@ public class OrganizationService {
     public User getOrCreateUser(String userId, String email, String name) {
         return userRepository.findById(userId)
                 .orElseGet(() -> {
-                    String role = "lostg826@gmail.com".equals(email) ? "ADMIN" : "MEMBER";
+                    String role = adminEmail.equals(email) ? "ADMIN" : "MEMBER";
                     User newUser = User.builder()
                             .id(userId)
                             .email(email != null ? email : "")

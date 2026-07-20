@@ -12,13 +12,18 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+import org.springframework.beans.factory.annotation.Value;
+
 @Component
 public class TenantContextFilter extends OncePerRequestFilter {
 
     private final com.ideamanagement.platform.repository.UserRepository userRepository;
+    private final String adminEmail;
 
-    public TenantContextFilter(com.ideamanagement.platform.repository.UserRepository userRepository) {
+    public TenantContextFilter(com.ideamanagement.platform.repository.UserRepository userRepository,
+                               @Value("${system.admin.email:admin@example.com}") String adminEmail) {
         this.userRepository = userRepository;
+        this.adminEmail = adminEmail;
     }
 
     @Override
@@ -39,14 +44,26 @@ public class TenantContextFilter extends OncePerRequestFilter {
                 var userOpt = userRepository.findById(userId);
                 if (userOpt.isPresent()) {
                     var user = userOpt.get();
+                    boolean changed = false;
+                    
+                    // Enforce that system administrator always has the ADMIN role
+                    if (adminEmail.equals(user.getEmail()) && !"ADMIN".equals(user.getRole())) {
+                        user.setRole("ADMIN");
+                        changed = true;
+                    }
+                    
+                    if (changed) {
+                        userRepository.save(user);
+                    }
+
+                    TenantContext.setCurrentUserRole(user.getRole());
                     if (user.getOrgId() != null) {
                         TenantContext.setCurrentOrgId(user.getOrgId());
-                        TenantContext.setCurrentUserRole(user.getRole());
                     }
                 } else {
                     String email = jwt.getClaimAsString("email");
                     String name = jwt.getClaimAsString("name");
-                    String role = "lostg826@gmail.com".equals(email) ? "ADMIN" : "MEMBER";
+                    String role = adminEmail.equals(email) ? "ADMIN" : "MEMBER";
                     
                     com.ideamanagement.platform.model.User newUser = com.ideamanagement.platform.model.User.builder()
                             .id(userId)
@@ -55,6 +72,8 @@ public class TenantContextFilter extends OncePerRequestFilter {
                             .role(role)
                             .build();
                     userRepository.save(newUser);
+                    
+                    TenantContext.setCurrentUserRole(role);
                 }
             }
         }

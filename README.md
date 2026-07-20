@@ -67,7 +67,7 @@ To launch the database, backend, and frontend containers in a single command:
 docker compose up --build -d
 ```
 *   The web application will be accessible at **[http://localhost](http://localhost)** (Port `80`).
-*   Sign in with `lostg826@gmail.com` to act as the System Administrator and approve workspace requests.
+*   Sign in with the configured system administrator email (defaults to `admin@example.com` in Sandbox mode) to act as the System Administrator and approve workspace requests. You can customize this email address in your `.env` file via `SYSTEM_ADMIN_EMAIL`.
 
 ### Running Tests
 To run the Spring Boot integration and security test suite:

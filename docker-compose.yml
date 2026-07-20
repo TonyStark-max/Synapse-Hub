@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     container_name: synapse-db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_DB: ideamanagement
       POSTGRES_USER: idea_app
@@ -33,6 +33,7 @@ services:
       DB_PASSWORD: idea_secure_password
       CLERK_JWKS_URL: ${CLERK_JWKS_URL:-http://localhost:8080/api/mock-jwks}
       CLERK_MOCK: "false"
+      SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-admin@example.com}
     depends_on:
       db:
         condition: service_healthy
@@ -44,6 +45,7 @@ services:
       args:
         VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-pk_test_dummy}
         VITE_BACKEND_URL: http://localhost:8080
+        VITE_SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-admin@example.com}
     container_name: synapse-frontend
     ports:
       - "80:80"

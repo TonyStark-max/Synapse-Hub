@@ -13,16 +13,22 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
+
 @RestController
 @RequestMapping("/api/organizations")
 public class OrganizationController {
 
     private final OrganizationService organizationService;
     private final UserService userService;
+    private final String adminEmail;
 
-    public OrganizationController(OrganizationService organizationService, UserService userService) {
+    public OrganizationController(OrganizationService organizationService, 
+                                  UserService userService,
+                                  @Value("${system.admin.email:admin@example.com}") String adminEmail) {
         this.organizationService = organizationService;
         this.userService = userService;
+        this.adminEmail = adminEmail;
     }
 
     @PostMapping
@@ -128,27 +134,27 @@ public class OrganizationController {
         }
     }
 
-    // List all pending organization requests (restricted to system admin lostg826@gmail.com)
+    // List all pending organization requests (restricted to system admin)
     @GetMapping("/requests")
     public ResponseEntity<?> getPendingWorkspaceRequests(JwtAuthenticationToken token) {
         String email = token.getToken().getClaimAsString("email");
         System.out.println("DEBUG: Incoming request from email=" + email + ", claims=" + token.getToken().getClaims());
-        if (!"lostg826@gmail.com".equals(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the system administrator (lostg826@gmail.com) can view organization requests");
+        if (!adminEmail.equals(email)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the system administrator (" + adminEmail + ") can view organization requests");
         }
         String userId = token.getToken().getSubject();
         return ResponseEntity.ok(organizationService.getPendingRequests(userId));
     }
 
-    // Approve an organization request (restricted to system admin lostg826@gmail.com)
+    // Approve an organization request (restricted to system admin)
     @PostMapping("/requests/{id}/approve")
     public ResponseEntity<?> approveWorkspaceRequest(
             JwtAuthenticationToken token,
             @PathVariable Long id) {
         
         String email = token.getToken().getClaimAsString("email");
-        if (!"lostg826@gmail.com".equals(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the system administrator (lostg826@gmail.com) can approve organization requests");
+        if (!adminEmail.equals(email)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the system administrator (" + adminEmail + ") can approve organization requests");
         }
 
         try {
@@ -162,15 +168,15 @@ public class OrganizationController {
         }
     }
 
-    // Reject an organization request (restricted to system admin lostg826@gmail.com)
+    // Reject an organization request (restricted to system admin)
     @PostMapping("/requests/{id}/reject")
     public ResponseEntity<?> rejectWorkspaceRequest(
             JwtAuthenticationToken token,
             @PathVariable Long id) {
         
         String email = token.getToken().getClaimAsString("email");
-        if (!"lostg826@gmail.com".equals(email)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the system administrator (lostg826@gmail.com) can reject organization requests");
+        if (!adminEmail.equals(email)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Only the system administrator (" + adminEmail + ") can reject organization requests");
         }
 
         try {

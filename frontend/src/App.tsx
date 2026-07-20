@@ -91,7 +91,7 @@ export default function App() {
   const orgRole = dbUser?.role || null;
   const activeRole = orgRole === 'ADMIN' ? 'ADMIN' : orgRole === 'MEMBER' ? 'MEMBER' : '';
   const userEmail = user?.primaryEmailAddress?.emailAddress;
-  const isSystemAdmin = userEmail === 'lostg826@gmail.com';
+  const isSystemAdmin = userEmail === (import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@example.com');
 
   // Ideas & Feed State
   const [ideas, setIdeas] = useState<Idea[]>([]);

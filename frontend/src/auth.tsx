@@ -41,8 +41,8 @@ export const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = (email: string, name: string) => {
-    // Determine system administrator email
-    const role = email.toLowerCase() === 'lostg826@gmail.com' ? 'ADMIN' : 'MEMBER';
+    const adminEmail = import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@example.com';
+    const role = email.toLowerCase() === adminEmail.toLowerCase() ? 'ADMIN' : 'MEMBER';
     // Stable user ID mapping based on email prefix to ensure user ID persistency
     const cleanPrefix = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
     const id = `user_mock_${cleanPrefix || 'visitor'}`;
@@ -203,7 +203,7 @@ export const SignInButton: React.FC<{ children: React.ReactElement, mode?: 'moda
                   required
                 />
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  💡 Use <strong>lostg826@gmail.com</strong> to sign in as the System Admin.
+                  💡 Use <strong>{import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@example.com'}</strong> to sign in as the System Admin.
                 </span>
               </div>
 
