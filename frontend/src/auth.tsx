@@ -187,7 +187,7 @@ export const SignInButton: React.FC<{ children: React.ReactElement, mode?: 'moda
                   type="text" 
                   value={name} 
                   onChange={(e) => setName(e.target.value)} 
-                  placeholder="e.g. Somu Thupakula" 
+                  placeholder="e.g. John Doe" 
                   className="input" 
                   required
                 />
@@ -198,7 +198,7 @@ export const SignInButton: React.FC<{ children: React.ReactElement, mode?: 'moda
                   type="email" 
                   value={email} 
                   onChange={(e) => setEmail(e.target.value)} 
-                  placeholder="e.g. somuthupakula983@gmail.com" 
+                  placeholder="e.g. john.doe@example.com" 
                   className="input" 
                   required
                 />
