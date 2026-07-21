@@ -1,8 +1,8 @@
 # Synapse Hub — System Design Document
 
-**Status:** In development
-**Owner:** [Your name]
-**Last updated:** [date]
+**Status:** Ready to Deploy
+**Owner:** Somasekhar Thupakula
+**Last updated:** 21-07-26
 
 ---
 
