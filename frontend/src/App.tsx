@@ -110,6 +110,8 @@ export default function App() {
   const [replyInputs, setReplyInputs] = useState<{ [key: number]: string }>({});
   const [commentsByIdea, setCommentsByIdea] = useState<{ [key: number]: Comment[] }>({});
   const [expandedComments, setExpandedComments] = useState<{ [key: number]: boolean }>({});
+  const [showReplyFormId, setShowReplyFormId] = useState<number | null>(null);
+  const [votingOn, setVotingOn] = useState<number | null>(null);
 
   // Workspace Discovery & Join flows
   const [activeOrgs, setActiveOrgs] = useState<ActiveOrg[]>([]);
@@ -221,6 +223,7 @@ export default function App() {
     }
   };
 
+
   const fetchActiveOrganizations = async () => {
     try {
       const headers = await getHeaders();
@@ -277,6 +280,9 @@ export default function App() {
     e.preventDefault();
     if (!newTitle.trim() || !newDesc.trim()) return;
 
+    const btn = (e.target as any).querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+
     try {
       const headers = await getHeaders();
       const res = await fetch(`${BACKEND_URL}/api/ideas`, {
@@ -304,6 +310,9 @@ export default function App() {
     } catch (e) {
       setErrorMessage('Failed to submit idea.');
       setSuccessMessage(null);
+    } finally {
+      const btn = (e.target as any).querySelector('button[type="submit"]');
+      if (btn) btn.disabled = false;
     }
   };
 
@@ -414,6 +423,8 @@ export default function App() {
   };
 
   const vote = async (ideaId: number, type: 'UP' | 'DOWN') => {
+    if (votingOn === ideaId) return;
+    setVotingOn(ideaId);
     try {
       const headers = await getHeaders();
       const res = await fetch(`${BACKEND_URL}/api/ideas/${ideaId}/vote`, {
@@ -430,6 +441,8 @@ export default function App() {
       }
     } catch (e) {
       setErrorMessage('Failed to submit vote.');
+    } finally {
+      setVotingOn(null);
     }
   };
 
@@ -508,12 +521,12 @@ export default function App() {
 
 
   // Render comments tree
-  const CommentNode = ({ comment, allComments }: { comment: Comment; allComments: Comment[] }) => {
+  const renderCommentNode = (comment: Comment, allComments: Comment[]) => {
     const replies = allComments.filter(c => c.parentCommentId === comment.id);
-    const [showReplyForm, setShowReplyForm] = useState(false);
+    const showReplyForm = showReplyFormId === comment.id;
 
     return (
-      <div className="comment-tree-node">
+      <div className="comment-tree-node" key={comment.id}>
         <div className="comment-box">
           <div className="comment-meta">
             <span className="comment-user">
@@ -524,7 +537,7 @@ export default function App() {
           </div>
           <p className="comment-text">{comment.content}</p>
           <button 
-            onClick={() => setShowReplyForm(!showReplyForm)}
+            onClick={() => setShowReplyFormId(showReplyForm ? null : comment.id)}
             className="comment-reply-trigger"
           >
             <CornerDownRight size={10} /> Reply
@@ -543,7 +556,7 @@ export default function App() {
             <button 
               onClick={() => {
                 submitComment(comment.ideaId, comment.id, true);
-                setShowReplyForm(false);
+                setShowReplyFormId(null);
               }}
               className="btn btn-primary"
               style={{ width: 'auto', padding: '0.4rem 1rem', fontSize: '0.75rem' }}
@@ -553,9 +566,7 @@ export default function App() {
           </div>
         )}
 
-        {replies.map(reply => (
-          <CommentNode key={reply.id} comment={reply} allComments={allComments} />
-        ))}
+        {replies.map(reply => renderCommentNode(reply, allComments))}
       </div>
     );
   };
@@ -603,13 +614,15 @@ export default function App() {
               <div className="status-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.5rem', padding: '0.4rem 0.8rem', borderRadius: '8px', background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Workspace:</span>
                 <strong className="status-value" style={{ fontSize: '0.8rem', color: 'var(--text-color)' }}>{currentOrgName}</strong>
-                <button 
-                  onClick={leaveWorkspace} 
-                  className="btn btn-secondary" 
-                  style={{ width: 'auto', padding: '0.25rem 0.6rem', fontSize: '0.65rem', marginLeft: '0.25rem', border: '1px solid var(--input-border)' }}
-                >
-                  Switch Workspace
-                </button>
+                {isSystemAdmin && (
+                  <button 
+                    onClick={leaveWorkspace} 
+                    className="btn btn-secondary" 
+                    style={{ width: 'auto', padding: '0.25rem 0.6rem', fontSize: '0.65rem', marginLeft: '0.25rem', border: '1px solid var(--input-border)' }}
+                  >
+                    Exit Workspace (Admin)
+                  </button>
+                )}
               </div>
             )}
             
@@ -966,6 +979,7 @@ export default function App() {
                           <button 
                             onClick={() => vote(idea.id, 'UP')}
                             className="vote-btn"
+                            disabled={votingOn === idea.id}
                           >
                             <ArrowUp size={14} />
                           </button>
@@ -975,6 +989,7 @@ export default function App() {
                           <button 
                             onClick={() => vote(idea.id, 'DOWN')}
                             className="vote-btn"
+                            disabled={votingOn === idea.id}
                           >
                             <ArrowDown size={14} />
                           </button>
@@ -1045,13 +1060,7 @@ export default function App() {
                           ) : (
                             commentsByIdea[idea.id]
                               .filter(c => c.parentCommentId === null)
-                              .map(comment => (
-                                <CommentNode 
-                                  key={comment.id} 
-                                  comment={comment} 
-                                  allComments={commentsByIdea[idea.id]} 
-                                />
-                              ))
+                              .map(comment => renderCommentNode(comment, commentsByIdea[idea.id]))
                           )}
                         </div>
                       )}

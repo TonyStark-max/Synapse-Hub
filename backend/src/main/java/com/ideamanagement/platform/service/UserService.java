@@ -62,9 +62,12 @@ public class UserService {
                 user.setName(name);
                 changed = true;
             }
-            if (orgId != null && !orgId.equals(user.getOrgId())) {
+            // Prevent changing organizations once a user has joined one (Enforces strict Option 1)
+            if (orgId != null && user.getOrgId() == null) {
                 user.setOrgId(orgId);
                 changed = true;
+            } else if (orgId != null && user.getOrgId() != null && !orgId.equals(user.getOrgId())) {
+                throw new SecurityException("User is already assigned to a different organization and cannot switch.");
             }
             if (!mappedRole.equals(user.getRole())) {
                 user.setRole(mappedRole);
