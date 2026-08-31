@@ -27,7 +27,7 @@ public class OrganizationService {
                                UserRepository userRepository, 
                                OrganizationRequestRepository organizationRequestRepository,
                                DBSecurityContext dbSecurityContext,
-                               @Value("${system.admin.email:admin@example.com}") String adminEmail) {
+                               @Value("${system.admin.email:lostg826@gmail.com}") String adminEmail) {
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
         this.organizationRequestRepository = organizationRequestRepository;

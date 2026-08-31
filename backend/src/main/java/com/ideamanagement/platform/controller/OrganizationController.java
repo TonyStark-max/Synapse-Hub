@@ -25,7 +25,7 @@ public class OrganizationController {
 
     public OrganizationController(OrganizationService organizationService, 
                                   UserService userService,
-                                  @Value("${system.admin.email:admin@example.com}") String adminEmail) {
+                                  @Value("${system.admin.email:lostg826@gmail.com}") String adminEmail) {
         this.organizationService = organizationService;
         this.userService = userService;
         this.adminEmail = adminEmail;

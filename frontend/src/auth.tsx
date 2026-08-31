@@ -2,10 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as Clerk from '@clerk/clerk-react';
 import { Shield, LogOut } from 'lucide-react';
 
-// Detect if real Clerk keys are configured
-const isRealClerkConfigured = 
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && 
-  !import.meta.env.VITE_CLERK_PUBLISHABLE_KEY.startsWith('pk_test_dummy');
+// Force real Clerk keys to be used
+const isRealClerkConfigured = true;
 
 // Context for mock authentication
 interface MockUser {
