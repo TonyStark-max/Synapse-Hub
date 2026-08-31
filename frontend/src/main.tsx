@@ -5,9 +5,9 @@ import App from './App.tsx'
 import { ClerkProvider } from '@clerk/clerk-react'
 import { MockAuthProvider } from './auth.tsx'
 
-// Load Clerk Publishable Key from Vite environment variables (fallback to default)
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_YXJyaXZpbmctY293YmlyZC0yLmNsZXJrLmFjY291bnRzLmRldiQ';
-const isRealClerkConfigured = true;
+// Load Clerk Publishable Key from Vite environment variables
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const isRealClerkConfigured = PUBLISHABLE_KEY && !PUBLISHABLE_KEY.startsWith('pk_test_dummy');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

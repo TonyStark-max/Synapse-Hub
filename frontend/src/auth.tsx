@@ -2,8 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as Clerk from '@clerk/clerk-react';
 import { Shield, LogOut } from 'lucide-react';
 
-// Force real Clerk keys to be used
-const isRealClerkConfigured = true;
+// Detect if real Clerk keys are configured
+const isRealClerkConfigured = 
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY && 
+  !import.meta.env.VITE_CLERK_PUBLISHABLE_KEY.startsWith('pk_test_dummy');
 
 // Context for mock authentication
 interface MockUser {
@@ -39,7 +41,7 @@ export const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const login = (email: string, name: string) => {
-    const adminEmail = import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@example.com';
+    const adminEmail = import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@gmail.com';
     const role = email.toLowerCase() === adminEmail.toLowerCase() ? 'ADMIN' : 'MEMBER';
     // Stable user ID mapping based on email prefix to ensure user ID persistency
     const cleanPrefix = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
@@ -207,7 +209,7 @@ export const SignInButton: React.FC<{ children: React.ReactElement, mode?: 'moda
                   required
                 />
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  💡 Use <strong>{import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@example.com'}</strong> to sign in as the System Admin.
+                  💡 Use <strong>{import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@gmail.com'}</strong> to sign in as the System Admin.
                 </span>
               </div>
 

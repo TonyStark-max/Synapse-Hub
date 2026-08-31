@@ -21,7 +21,7 @@ public class TenantContextFilter extends OncePerRequestFilter {
     private final String adminEmail;
 
     public TenantContextFilter(com.ideamanagement.platform.repository.UserRepository userRepository,
-                               @Value("${system.admin.email:lostg826@gmail.com}") String adminEmail) {
+                               @Value("${system.admin.email:admin@gmail.com}") String adminEmail) {
         this.userRepository = userRepository;
         this.adminEmail = adminEmail;
     }
