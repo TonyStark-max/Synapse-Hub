@@ -13,7 +13,10 @@ class IdeaPlatformApplicationTests {
 
 	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+			.withDatabaseName("ideamanagement")
+			.withUsername("idea_app")
+			.withPassword("idea_secure_password");
 
 	@Test
 	void contextLoads() {
