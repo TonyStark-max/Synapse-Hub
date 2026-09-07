@@ -2,23 +2,17 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import { ClerkProvider } from '@clerk/clerk-react'
-import { MockAuthProvider } from './auth.tsx'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter } from 'react-router-dom'
 
-// Load Clerk Publishable Key from Vite environment variables
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const isRealClerkConfigured = PUBLISHABLE_KEY && !PUBLISHABLE_KEY.startsWith('pk_test_dummy');
+const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MockAuthProvider>
-      {isRealClerkConfigured ? (
-        <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-          <App />
-        </ClerkProvider>
-      ) : (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
         <App />
-      )}
-    </MockAuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   </StrictMode>,
 )

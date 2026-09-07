@@ -9,24 +9,18 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Entity
-@Table(name = "organizations")
+@Table(name = "companies")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Organization {
+public class Company {
 
     @Id
     private String id;
 
     @Column(nullable = false)
     private String name;
-
-    @Column(name = "invite_code", unique = true, nullable = false)
-    private String inviteCode;
-
-    @Column(name = "company_id")
-    private String companyId;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;

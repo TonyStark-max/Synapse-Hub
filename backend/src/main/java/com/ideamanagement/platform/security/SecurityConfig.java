@@ -8,9 +8,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -25,13 +23,8 @@ import java.util.Map;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Value("${clerk.mock:true}")
-    private boolean mockEnabled;
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
-    private String jwkSetUri;
-
-    @Value("${frontend.url:http://localhost:5173}")
+@Value("${frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
     private final TenantContextFilter tenantContextFilter;
@@ -48,11 +41,19 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Allow public access to Swagger UI, API docs, and invite code check
-                .requestMatchers("/api/organizations/invite/**").permitAll()
-                .requestMatchers("/api/mock-jwks/**").permitAll()
+                .requestMatchers("/api/organizations/invite/**", "/uploads/**").permitAll()
                 .anyRequest().authenticated()
             )
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())))
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(org.springframework.security.config.Customizer.withDefaults())
+                .bearerTokenResolver(request -> {
+                    String authHeader = request.getHeader("Authorization");
+                    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                        return authHeader.substring(7);
+                    }
+                    return request.getParameter("access_token");
+                })
+            )
             .addFilterAfter(tenantContextFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -73,46 +74,4 @@ public class SecurityConfig {
         return source;
     }
 
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        if (mockEnabled) {
-            return new JwtDecoder() {
-                @Override
-                public Jwt decode(String token) throws JwtException {
-                    try {
-                        String[] parts = token.split("\\.");
-                        if (parts.length < 2) {
-                            throw new JwtException("Invalid token format");
-                        }
-                        byte[] payloadBytes;
-                        try {
-                            payloadBytes = java.util.Base64.getUrlDecoder().decode(parts[1]);
-                        } catch (Exception e) {
-                            payloadBytes = java.util.Base64.getDecoder().decode(parts[1]);
-                        }
-                        
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> claims = new com.fasterxml.jackson.databind.ObjectMapper().readValue(payloadBytes, Map.class);
-                        
-                        Object expClaim = claims.get("exp");
-                        Object iatClaim = claims.get("iat");
-                        
-                        Instant iat = iatClaim != null ? Instant.ofEpochSecond(((Number) iatClaim).longValue()) : Instant.now();
-                        Instant exp = expClaim != null ? Instant.ofEpochSecond(((Number) expClaim).longValue()) : Instant.now().plusSeconds(3600);
-
-                        return new Jwt(
-                                token,
-                                iat,
-                                exp,
-                                Map.of("alg", "none"),
-                                claims
-                        );
-                    } catch (Exception e) {
-                        throw new JwtException("Failed to decode mock JWT token", e);
-                    }
-                }
-            };
-        }
-        return NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-    }
 }

@@ -11,7 +11,10 @@ Teams often have product feedback, feature requests, and internal ideas scattere
 *   **Logarithmic Idea Ranking:** Ranks submissions using a gravity-based time-decay algorithm that balances vote counts against submission recency, preventing old ideas from permanently dominating the top feed.
 *   **Database-Level Tenant Isolation:** Enforces absolute data boundaries between workspaces directly at the PostgreSQL layer via Row-Level Security (RLS), preventing cross-tenant leakage.
 *   **Real-time Collaboration:** Leverages real-time channels to broadcast new ideas, votes, and comments to active workspace members instantly.
-*   **Zero-Dependency Local Sandbox:** Integrates a mock authentication provider that enables immediate, single-command full-stack testing (with admin and member roles) without requiring Clerk registration.
+*   **Zero-Dependency Local Sandbox:** Integrates a mock authentication provider that enables immediate, single-command full-stack testing (with admin and member roles) without requiring Google OAuth registration.
+*   **Approval-Based Workspaces:** Users can browse public organizations and "Request to Join". Workspace Admins can approve or reject users directly from an in-app queue, removing the need for insecure invite codes or company dropdowns.
+*   **Media Support:** Users can upload profile pictures and attach images to ideas and comments. Media is stored in a persistent Docker volume (`backend_uploads`).
+*   **Continuous Integration:** GitHub Actions pipeline pre-configured for automated Maven backend testing, npm frontend auditing/linting, and Docker compose build verification.
 *   **Structured Lifecycle Tracking:** Allows workspace administrators to review, approve, reject, and update the status (e.g., Planned, In Progress, Completed) of submitted ideas.
 
 ## What It Deliberately Doesn't Do
@@ -30,7 +33,7 @@ Teams often have product feedback, feature requests, and internal ideas scattere
 [Supabase Realtime] <--- (RLS Filtered) <--- [PostgreSQL (Row-Level Security)]
 ```
 
-*   **Authentication:** The browser client obtains a JWT token (from Clerk or the local sandbox) and attaches it to request headers.
+*   **Authentication:** The browser client obtains a JWT token (from Google OAuth or the local sandbox) and attaches it to request headers.
 *   **Security Context:** The Spring Boot backend decodes the token, loads the user's active database workspace profile, and binds the tenant scope to the PostgreSQL session transaction.
 *   **Isolation Enforcement:** PostgreSQL evaluates Row-Level Security policies on the target tables (`ideas`, `comments`, `votes`), filtering the result sets regardless of application query logic.
 *   *Detailed design rationale, threat models, and security architectures are documented in [ARCHITECTURE.md](./ARCHITECTURE.md).*
@@ -41,7 +44,7 @@ Teams often have product feedback, feature requests, and internal ideas scattere
 *   **Database:** PostgreSQL 16 (Row-Level Security enabled).
 *   **Real-time:** Supabase Realtime (real-time PostgreSQL change broadcasts).
 *   **Frontend:** React 18, TypeScript, Vite, Vanilla CSS.
-*   **Authentication:** Clerk SSO (Production) / Local Mock JWT Sandbox (Development).
+*   **Authentication:** Google OAuth SSO (Production) / Local Mock JWT Sandbox (Development).
 *   **Containerization:** Docker, Docker Compose, Nginx.
 
 ## Getting Started
@@ -54,12 +57,12 @@ Teams often have product feedback, feature requests, and internal ideas scattere
 ### Environment Setup (Optional)
 By default, the docker-compose template will boot straight into Sandbox Mode automatically with zero configuration. 
 
-If you want to configure real Clerk SSO, copy the template and edit your credentials:
+If you want to configure real Google OAuth SSO, copy the template and edit your credentials:
 1. Copy the example template:
    ```bash
    cp .env.example .env
    ```
-2. Open `.env` and fill in your Clerk secret keys.
+2. Open `.env` and fill in your Google OAuth secret keys.
 
 ### Running Locally
 To launch the database, backend, and frontend containers in a single command:

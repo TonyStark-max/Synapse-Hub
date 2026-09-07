@@ -2,9 +2,11 @@ package com.ideamanagement.platform.service;
 
 import com.ideamanagement.platform.model.Organization;
 import com.ideamanagement.platform.model.OrganizationRequest;
+import com.ideamanagement.platform.model.WorkspaceJoinRequest;
 import com.ideamanagement.platform.model.User;
 import com.ideamanagement.platform.repository.OrganizationRepository;
 import com.ideamanagement.platform.repository.OrganizationRequestRepository;
+import com.ideamanagement.platform.repository.WorkspaceJoinRequestRepository;
 import com.ideamanagement.platform.repository.UserRepository;
 import com.ideamanagement.platform.security.DBSecurityContext;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -20,17 +23,20 @@ public class OrganizationService {
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
     private final OrganizationRequestRepository organizationRequestRepository;
+    private final WorkspaceJoinRequestRepository joinRequestRepository;
     private final DBSecurityContext dbSecurityContext;
     private final String adminEmail;
 
     public OrganizationService(OrganizationRepository organizationRepository, 
                                UserRepository userRepository, 
                                OrganizationRequestRepository organizationRequestRepository,
+                               WorkspaceJoinRequestRepository joinRequestRepository,
                                DBSecurityContext dbSecurityContext,
                                @Value("${system.admin.email:admin@gmail.com}") String adminEmail) {
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
         this.organizationRequestRepository = organizationRequestRepository;
+        this.joinRequestRepository = joinRequestRepository;
         this.dbSecurityContext = dbSecurityContext;
         this.adminEmail = adminEmail;
     }
@@ -43,17 +49,21 @@ public class OrganizationService {
         // 1. Explicitly set context in Postgres session for RLS prior to saving
         dbSecurityContext.setContext(orgId, userId);
 
+        User user = userRepository.findById(userId)
+                .orElse(User.builder().id(userId).build());
+
+        String companyId = user.getCompanyId();
+
         Organization org = Organization.builder()
                 .id(orgId)
                 .name(name)
                 .inviteCode(inviteCode)
+                .companyId(companyId)
                 .build();
         
         Organization savedOrg = organizationRepository.save(org);
 
         // 2. Register/update user as the ADMIN of the new organization
-        User user = userRepository.findById(userId)
-                .orElse(User.builder().id(userId).build());
         user.setEmail(email);
         user.setName(userName);
         user.setOrgId(orgId);
@@ -70,11 +80,14 @@ public class OrganizationService {
         Organization org = organizationRepository.findByInviteCode(inviteCode)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid invite code"));
 
+        User user = userRepository.findById(userId)
+                .orElse(User.builder().id(userId).build());
+
+
+
         // 1. Explicitly set context in Postgres session for RLS prior to updating user
         dbSecurityContext.setContext(org.getId(), userId);
 
-        User user = userRepository.findById(userId)
-                .orElse(User.builder().id(userId).build());
         user.setEmail(email);
         user.setName(userName);
         user.setOrgId(org.getId());
@@ -100,8 +113,14 @@ public class OrganizationService {
         return organizationRepository.findByInviteCode(inviteCode).orElse(null);
     }
 
-    public List<Organization> getAllOrganizations() {
-        return organizationRepository.findAll();
+    public List<Map<String, Object>> getPublicActiveOrganizations() {
+        List<Organization> orgs = organizationRepository.findAll();
+        
+        // Strip the invite code for public viewing!
+        return orgs.stream().map(o -> Map.of(
+            "id", (Object) o.getId(),
+            "name", (Object) o.getName()
+        )).toList();
     }
 
     @Transactional
@@ -110,6 +129,10 @@ public class OrganizationService {
         if (organizationRepository.existsById(orgId) || organizationRequestRepository.findByOrgId(orgId).isPresent()) {
             throw new IllegalArgumentException("Organization ID is already taken");
         }
+
+        User user = userRepository.findById(userId).orElse(null);
+        String companyId = user != null ? user.getCompanyId() : null;
+
         OrganizationRequest req = OrganizationRequest.builder()
                 .orgId(orgId)
                 .name(name)
@@ -118,6 +141,7 @@ public class OrganizationService {
                 .requesterEmail(email)
                 .requesterName(userName)
                 .status("PENDING")
+                .companyId(companyId)
                 .build();
         return organizationRequestRepository.save(req);
     }
@@ -181,5 +205,71 @@ public class OrganizationService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         user.setOrgId(null);
         userRepository.save(user);
+    }
+
+    @Transactional
+    public WorkspaceJoinRequest requestToJoin(String orgId, String userId, String email, String userName) {
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new IllegalArgumentException("Organization not found"));
+        
+        User user = userRepository.findById(userId)
+                .orElse(User.builder().id(userId).build());
+
+
+
+        if (joinRequestRepository.findByOrgIdAndUserId(orgId, userId).isPresent()) {
+            throw new IllegalArgumentException("Join request already pending");
+        }
+
+        WorkspaceJoinRequest req = WorkspaceJoinRequest.builder()
+                .orgId(orgId)
+                .userId(userId)
+                .email(email)
+                .name(userName)
+                .build();
+        return joinRequestRepository.save(req);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkspaceJoinRequest> getPendingJoinRequests(String orgId, String adminId) {
+        dbSecurityContext.setContext(orgId, adminId);
+        return joinRequestRepository.findByOrgIdAndStatus(orgId, "PENDING");
+    }
+
+    @Transactional
+    public void approveJoinRequest(Long requestId, String adminId, String orgId) {
+        dbSecurityContext.setContext(orgId, adminId);
+        WorkspaceJoinRequest req = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found"));
+        
+        if (!"PENDING".equals(req.getStatus()) || !req.getOrgId().equals(orgId)) {
+            throw new IllegalArgumentException("Invalid request");
+        }
+
+        User user = userRepository.findById(req.getUserId())
+                .orElse(User.builder().id(req.getUserId()).build());
+        
+        user.setEmail(req.getEmail());
+        user.setName(req.getName());
+        user.setOrgId(orgId);
+        user.setRole("MEMBER");
+        userRepository.save(user);
+
+        req.setStatus("APPROVED");
+        joinRequestRepository.save(req);
+    }
+
+    @Transactional
+    public void rejectJoinRequest(Long requestId, String adminId, String orgId) {
+        dbSecurityContext.setContext(orgId, adminId);
+        WorkspaceJoinRequest req = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found"));
+        
+        if (!"PENDING".equals(req.getStatus()) || !req.getOrgId().equals(orgId)) {
+            throw new IllegalArgumentException("Invalid request");
+        }
+
+        req.setStatus("REJECTED");
+        joinRequestRepository.save(req);
     }
 }

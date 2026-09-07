@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/ideas")
@@ -21,11 +25,26 @@ public class IdeaController {
     private final IdeaService ideaService;
     private final SimpleRateLimiter rateLimiter;
     private final UserService userService;
+    private final Map<String, List<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
     public IdeaController(IdeaService ideaService, SimpleRateLimiter rateLimiter, UserService userService) {
         this.ideaService = ideaService;
         this.rateLimiter = rateLimiter;
         this.userService = userService;
+    }
+
+    private void notifyClients(String orgId) {
+        List<SseEmitter> orgEmitters = emitters.get(orgId);
+        if (orgEmitters != null) {
+            for (SseEmitter emitter : orgEmitters) {
+                try {
+                    emitter.send(SseEmitter.event().name("idea-change").data("changed"));
+                } catch (IOException e) {
+                    emitter.complete();
+                    orgEmitters.remove(emitter);
+                }
+            }
+        }
     }
 
     private void syncUser(JwtAuthenticationToken token) {
@@ -81,9 +100,11 @@ public class IdeaController {
         String title = body.get("title");
         String description = body.get("description");
         String tag = body.get("tag");
+        String imageUrl = body.get("imageUrl");
 
         try {
-            Idea idea = ideaService.submitIdea(title, description, tag, orgId, userId);
+            Idea idea = ideaService.submitIdea(title, description, tag, orgId, userId, imageUrl);
+            notifyClients(orgId);
             return ResponseEntity.status(HttpStatus.CREATED).body(idea);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -110,6 +131,23 @@ public class IdeaController {
         return ResponseEntity.ok(ideas);
     }
 
+    @GetMapping("/stream")
+    public SseEmitter stream(JwtAuthenticationToken token) {
+        String userId = token.getToken().getSubject();
+        String orgId = resolveOrgId(userId);
+        
+        SseEmitter emitter = new SseEmitter(600000L); // 10 minutes timeout
+        if (orgId != null && !orgId.trim().isEmpty()) {
+            emitters.computeIfAbsent(orgId, k -> new CopyOnWriteArrayList<>()).add(emitter);
+            emitter.onCompletion(() -> emitters.get(orgId).remove(emitter));
+            emitter.onTimeout(() -> emitters.get(orgId).remove(emitter));
+            emitter.onError((e) -> emitters.get(orgId).remove(emitter));
+        } else {
+            emitter.completeWithError(new RuntimeException("No active organization context found in your profile"));
+        }
+        return emitter;
+    }
+
     @PostMapping("/{id}/vote")
     public ResponseEntity<?> voteIdea(
             JwtAuthenticationToken token,
@@ -134,6 +172,7 @@ public class IdeaController {
 
         try {
             Idea updatedIdea = ideaService.voteIdea(id, userId, orgId, voteType);
+            notifyClients(orgId);
             return ResponseEntity.ok(updatedIdea);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -165,9 +204,11 @@ public class IdeaController {
         String content = (String) body.get("content");
         Number parentIdNum = (Number) body.get("parentCommentId");
         Long parentCommentId = parentIdNum != null ? parentIdNum.longValue() : null;
+        String imageUrl = (String) body.get("imageUrl");
 
         try {
-            Comment comment = ideaService.addComment(id, parentCommentId, content, userId, orgId);
+            Comment comment = ideaService.addComment(id, parentCommentId, content, userId, orgId, imageUrl);
+            notifyClients(orgId);
             return ResponseEntity.status(HttpStatus.CREATED).body(comment);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -222,6 +263,7 @@ public class IdeaController {
 
         try {
             Idea updatedIdea = ideaService.updateIdeaStatus(id, status, userId, orgId, mappedRole);
+            notifyClients(orgId);
             return ResponseEntity.ok(updatedIdea);
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());

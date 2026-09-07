@@ -15,7 +15,7 @@ Synapse Hub is a multi-tenant idea management platform designed for internal org
 ### Non-Goals
 *   **Cross-Tenant Analytics:** The system deliberately prevents aggregation or search across different workspaces.
 *   **High-Volume Real-Time Chat:** The real-time layer is scoped exclusively to feedback events, not instant messaging.
-*   **User Identity Management:** User registration, profile hosting, and session verification are delegated to Clerk (in production) to focus strictly on tenant workspace logic.
+*   **User Identity Management:** User registration, profile hosting, and session verification are delegated to Google OAuth (in production) to focus strictly on tenant workspace logic.
 
 ---
 
@@ -48,8 +48,8 @@ At rest, Synapse Hub models a workspace topology around five key entities:
 
 ## Core Components
 
-### Auth & Identity (Clerk / Local Sandbox)
-Authenticates user sessions. In production, Clerk verifies user claims via signed JWTs. In development, a mock sandbox router creates local unsigned JWT tokens, enabling immediate login for testers.
+### Auth & Identity (Google OAuth / Local Sandbox)
+Authenticates user sessions. In production, Google OAuth verifies user claims via signed JWTs. In development, a mock sandbox router creates local unsigned JWT tokens, enabling immediate login for testers.
 
 ### API Layer (Spring Boot 3)
 A stateless REST API built using Java 21 and Spring Boot. It intercepts incoming calls, extracts JWT claims, runs the token-bucket rate limiter, and executes business logic.
@@ -123,7 +123,7 @@ $$\text{Score} = \log_{10}(\max(1, \text{Upvotes} - \text{Downvotes})) + \frac{\
 | **Privilege Escalation** | Admin operations (e.g. updating idea status) enforce `@PreAuthorize("hasRole('ADMIN')")` check checks. The workspace admin role is derived from the database user record, not the JWT token. |
 | **Stored XSS** | React automatically escapes string values on interpolation. Markdown rendering utilizes sanitized parsers. |
 | **SQL Injection** | All database transactions use Spring Data JPA parameterized queries; raw SQL string concatenations are blocked. |
-| **Secret Leakage** | Clerk credentials, passwords, and database connection strings are loaded via a git-ignored `.env` file. |
+| **Secret Leakage** | Google OAuth credentials, passwords, and database connection strings are loaded via a git-ignored `.env` file. |
 | **MUTATION Abuse / Spam** | Mutating endpoints are guarded by a thread-safe token-bucket rate limiter. |
 | **Realtime Channel Leaks** | Webhook subscriptions are authorized by Supabase using the same RLS database credentials. |
 | **CSRF / MITM** | Stateless bearer token authentication is used (no browser cookies). HTTPS is enforced at the Nginx proxy layer. |

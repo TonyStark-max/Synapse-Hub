@@ -38,6 +38,9 @@ public class Idea {
     @Column(name = "user_id")
     private String userId;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 

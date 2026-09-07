@@ -48,7 +48,7 @@ public class IdeaService {
     }
 
     @Transactional
-    public Idea submitIdea(String title, String description, String tag, String orgId, String userId) {
+    public Idea submitIdea(String title, String description, String tag, String orgId, String userId, String imageUrl) {
         // Enforce server-side context for RLS in Postgres
         dbSecurityContext.setContext(orgId, userId);
 
@@ -77,6 +77,7 @@ public class IdeaService {
                 .status("SUBMITTED")
                 .orgId(orgId)
                 .userId(userId)
+                .imageUrl(imageUrl)
                 .upvotesCount(0)
                 .downvotesCount(0)
                 .hotScore(initialHotScore)
@@ -162,7 +163,7 @@ public class IdeaService {
     }
 
     @Transactional
-    public Comment addComment(Long ideaId, Long parentCommentId, String content, String userId, String orgId) {
+    public Comment addComment(Long ideaId, Long parentCommentId, String content, String userId, String orgId, String imageUrl) {
         dbSecurityContext.setContext(orgId, userId);
 
         if (content == null || content.trim().isEmpty() || content.length() > 2000) {
@@ -187,6 +188,7 @@ public class IdeaService {
                 .content(sanitizedContent)
                 .userId(userId)
                 .orgId(orgId)
+                .imageUrl(imageUrl)
                 .build();
 
         Comment savedComment = commentRepository.save(comment);

@@ -35,6 +35,9 @@ public class Comment {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 

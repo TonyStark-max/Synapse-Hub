@@ -30,6 +30,12 @@ public class User {
     @Column(name = "org_id")
     private String orgId;
 
+    @Column(name = "company_id")
+    private String companyId;
+
+    @Column(name = "profile_pic_url")
+    private String profilePicUrl;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 }

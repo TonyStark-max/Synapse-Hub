@@ -38,7 +38,7 @@ The system is designed around one central engineering constraint: every organiza
                      └───┬───────┬──┘
                          │       │
                 ┌────────▼─┐   ┌▼────────────┐
-                │  Clerk    │   │ PostgreSQL   │
+                │  Google OAuth    │   │ PostgreSQL   │
                 │ (identity)│   │ (RLS-enabled)│
                 └───────────┘   └──────┬───────┘
                                        │
@@ -48,13 +48,13 @@ The system is designed around one central engineering constraint: every organiza
                                 └───────────────┘
 ```
 
-Requests enter through nginx, which terminates TLS and forwards to the Spring Boot API. The API verifies identity via Clerk-issued JWTs, applies application-level authorization scoped to the caller's organization, and reads/writes PostgreSQL — where Row-Level Security independently re-enforces that same organization boundary. Data changes propagate to connected clients via Supabase Realtime, itself governed by the same RLS policies.
+Requests enter through nginx, which terminates TLS and forwards to the Spring Boot API. The API verifies identity via Google OAuth-issued JWTs, applies application-level authorization scoped to the caller's organization, and reads/writes PostgreSQL — where Row-Level Security independently re-enforces that same organization boundary. Data changes propagate to connected clients via Supabase Realtime, itself governed by the same RLS policies.
 
 ## 3. Component Breakdown
 
 ### 3.1 Frontend — React / Vite SPA
 
-A single-page application handling authentication state (via Clerk's React SDK), the idea feed, submission forms, threaded comments, and admin controls.
+A single-page application handling authentication state (via Google OAuth's React SDK), the idea feed, submission forms, threaded comments, and admin controls.
 
 **Key pages:**
 - Sign in / Organization selection
@@ -108,7 +108,10 @@ comments
 
 ```
 POST   /api/orgs                          — create organization
-POST   /api/orgs/join                     — join via invite code
+POST   /api/orgs/join-requests            — request to join an organization
+GET    /api/orgs/{orgId}/join-requests    — admin-only list pending join requests
+POST   /api/orgs/{orgId}/join-requests/{requestId}/approve — admin-only approve join request
+POST   /api/orgs/{orgId}/join-requests/{requestId}/reject  — admin-only reject join request
 GET    /api/ideas?sort=hot|new|top        — list ideas for caller's org
 POST   /api/ideas                         — submit idea
 GET    /api/ideas/{id}                    — idea detail + comments
@@ -119,17 +122,17 @@ PATCH  /api/ideas/{id}/status             — admin-only status transition
 GET    /api/orgs/members                  — admin-only member/role list
 ```
 
-Every endpoint derives `org_id` from the verified Clerk session — never from the request path, body, or query parameters — before touching the database.
+Every endpoint derives `org_id` from the verified Google OAuth session — never from the request path, body, or query parameters — before touching the database.
 
 ## 6. Authentication & Authorization
 
 ### 6.1 Local Authentication *(Bootstrap / Temporary)*
 
-For early local development before Clerk is fully wired in, a mock JWT sandbox mode issues locally-signed tokens with a fixed test org/user, letting the API and frontend be developed and tested without live Clerk credentials. This mode is explicitly disabled outside local/dev environments.
+For early local development before Google OAuth is fully wired in, a mock JWT sandbox mode issues locally-signed tokens with a fixed test org/user, letting the API and frontend be developed and tested without live Google OAuth credentials. This mode is explicitly disabled outside local/dev environments.
 
 ### 6.2 OAuth2 Authorization Code Flow *(Production Auth)*
 
-Clerk handles the full OAuth2/OIDC flow for real users, issuing signed JWTs containing user identity and organization membership claims. The backend verifies signature, issuer, audience, and expiry on every request.
+Google OAuth handles the full OAuth2/OIDC flow for real users, issuing signed JWTs containing user identity and organization membership claims. The backend verifies signature, issuer, audience, and expiry on every request.
 
 ### 6.3 (numbering follows the source outline as given — no 6.3 section was specified)
 
@@ -165,7 +168,7 @@ Backend and frontend each have a Dockerfile; local development and multi-contain
 nginx is the single public entry point; the Spring Boot API and PostgreSQL are not directly internet-exposed.
 
 ### 8.4 Secrets Management
-Clerk keys, database credentials, and any third-party API keys are injected via environment variables at deploy time, never committed to source. *(Name your actual secrets manager/CI secret store once decided.)*
+Google OAuth keys, database credentials, and any third-party API keys are injected via environment variables at deploy time, never committed to source. *(Name your actual secrets manager/CI secret store once decided.)*
 
 ### 8.5 Database Backup
 *(Fill in the actual backup cadence and mechanism once configured — e.g. automated daily snapshots via your hosting provider — do not leave this section unaddressed at launch, see SECURITY-CHECKLIST.md.)*

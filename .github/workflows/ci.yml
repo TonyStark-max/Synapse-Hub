@@ -1,0 +1,80 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  backend-checks:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Cache Maven packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build and Test with Maven
+        working-directory: ./backend
+        # clean verify runs compilation, tests, and static checks
+        run: ./mvnw clean verify
+
+  frontend-checks:
+    name: Frontend Build, Lint & Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+
+      - name: Install Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Security Scan (npm audit)
+        working-directory: ./frontend
+        # Scans for known high-severity CVE vulnerabilities in dependencies
+        run: npm audit --audit-level=high
+        # Set to true to allow pipeline to continue even if vulnerabilities are found initially
+        continue-on-error: true
+
+      - name: Run Linter (oxlint)
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Build Application (TypeScript checks & Vite bundle)
+        working-directory: ./frontend
+        run: npm run build
+
+  docker-verification:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    # Wait for backend and frontend tests to pass before attempting the docker build
+    needs: [backend-checks, frontend-checks]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Test Docker Compose Build
+        # This acts as an integration test to ensure your Dockerfiles compile correctly
+        run: docker compose build

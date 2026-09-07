@@ -41,6 +41,9 @@ public class OrganizationRequest {
     @Column(nullable = false)
     private String status; // 'PENDING', 'APPROVED', 'REJECTED'
 
+    @Column(name = "company_id")
+    private String companyId;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 }

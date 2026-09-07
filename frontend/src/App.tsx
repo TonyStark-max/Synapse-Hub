@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { ProfileEditModal } from './components/ProfileEditModal';
+import { ImageUploadButton } from './components/ImageUploadButton';
 import { 
   Lightbulb, 
   Plus, 
@@ -17,20 +19,9 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
-import { 
-  SignedIn, 
-  SignedOut, 
-  SignInButton, 
-  UserButton, 
-  useAuth,
-  useUser
-} from './auth';
-import { createClient } from '@supabase/supabase-js';
+import { GoogleOAuthProvider, GoogleLogin, googleLogout } from '@react-oauth/google';
+import { jwtDecode } from "jwt-decode";
 
-// Setup Supabase Realtime Client (fallbacks to mock when local development keys are mock)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mock-supabase.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'mock-key';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
@@ -47,6 +38,7 @@ interface Idea {
   upvotesCount: number;
   downvotesCount: number;
   hotScore: number;
+  imageUrl?: string;
 }
 
 interface Comment {
@@ -57,6 +49,7 @@ interface Comment {
   userName?: string;
   orgId: string;
   content: string;
+  imageUrl?: string;
   createdAt: string;
 }
 
@@ -78,19 +71,43 @@ interface OrgRequest {
   createdAt: string;
 }
 
-export default function App() {
+
+const getFullImageUrl = (url: string | undefined | null) => {
+  if (!url) return '';
+  if (url.startsWith('/')) return BACKEND_URL + url;
+  return url;
+};
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy';
+
+export default function AppWrapper() {
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <App />
+    </GoogleOAuthProvider>
+  );
+}
+
+function App() {
   // Theme State (Dark mode by default)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // Clerk Auth Hooks
-  const { isLoaded, getToken } = useAuth();
-  const { user } = useUser();
-  const [dbUser, setDbUser] = useState<{ id: string, email: string, name: string, role: string, orgId: string | null } | null>(null);
+  // Auth Hooks
+  const [googleToken, setGoogleToken] = useState<string | null>(localStorage.getItem('google_jwt'));
+  const isLoaded = true;
+  let userEmail = '';
+  if (googleToken) {
+    try {
+      const decoded: any = jwtDecode(googleToken);
+      userEmail = decoded.email;
+    } catch(e) {}
+  }
+  
+  const [dbUser, setDbUser] = useState<{ id: string, email: string, name: string, role: string, orgId: string | null, companyId: string | null, profilePicUrl: string | null } | null>(null);
 
   const orgId = dbUser?.orgId || null;
   const orgRole = dbUser?.role || null;
   const activeRole = orgRole === 'ADMIN' ? 'ADMIN' : orgRole === 'MEMBER' ? 'MEMBER' : '';
-  const userEmail = user?.primaryEmailAddress?.emailAddress;
   const isSystemAdmin = userEmail === (import.meta.env.VITE_SYSTEM_ADMIN_EMAIL || 'admin@gmail.com');
 
   // Ideas & Feed State
@@ -104,6 +121,10 @@ export default function App() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newTag, setNewTag] = useState('Feature');
+  const [newIdeaImageUrl, setNewIdeaImageUrl] = useState('');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [commentImageUrls, setCommentImageUrls] = useState<{ [key: number]: string }>({});
+  const [replyImageUrls, setReplyImageUrls] = useState<{ [key: number]: string }>({});
 
   // Comment & replies states
   const [commentInputs, setCommentInputs] = useState<{ [key: number]: string }>({});
@@ -116,6 +137,7 @@ export default function App() {
   // Workspace Discovery & Join flows
   const [activeOrgs, setActiveOrgs] = useState<ActiveOrg[]>([]);
   const [pendingRequests, setPendingRequests] = useState<OrgRequest[]>([]);
+  const [pendingJoinRequests, setPendingJoinRequests] = useState<any[]>([]);
   const currentOrgName = activeOrgs.find(o => o.id === orgId)?.name || orgId || '';
   
   // Organization Request Form State
@@ -134,6 +156,22 @@ export default function App() {
     fetchDbProfile();
   }, [isLoaded, userEmail]);
 
+  
+
+  const handleProfileSave = async (name: string, profilePicUrl: string) => {
+    const headers = await getHeaders();
+    const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ name, profilePicUrl })
+    });
+    if (res.ok) {
+      fetchDbProfile();
+    } else {
+      throw new Error(await res.text());
+    }
+  };
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
@@ -144,6 +182,7 @@ export default function App() {
     if (orgId) {
       fetchIdeas();
       fetchPendingRequests();
+      if (activeRole === 'ADMIN') fetchPendingJoinRequests();
     } else {
       setIdeas([]);
       fetchActiveOrganizations();
@@ -153,36 +192,45 @@ export default function App() {
     setSuccessMessage(null);
   }, [orgId, sortBy, isLoaded, userEmail]);
 
-  // Realtime changes hook
+  // Realtime changes hook via SSE
   useEffect(() => {
-    if (!orgId || supabaseAnonKey === 'mock-key') return;
+    if (!orgId || !isLoaded) return;
 
-    const channel = supabase
-      .channel(`ideas-changes-${orgId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'ideas',
-          filter: `org_id=eq.${orgId}`
-        },
-        () => {
-          fetchIdeas();
-        }
-      )
-      .subscribe();
+    let eventSource: EventSource | null = null;
+    let isActive = true;
+
+    const setupSSE = async () => {
+      const token = googleToken;
+      if (!isActive) return;
+      
+      // Pass token as query parameter to the SSE stream so backend can validate it
+      
+      const sseUrl = `${BACKEND_URL}/api/ideas/stream?access_token=${token || ''}`;
+      eventSource = new EventSource(sseUrl);
+      
+      eventSource.addEventListener('idea-change', () => {
+        fetchIdeas();
+      });
+      
+      eventSource.onerror = () => {
+        eventSource?.close();
+      };
+    };
+
+    setupSSE();
 
     return () => {
-      supabase.removeChannel(channel);
+      isActive = false;
+      if (eventSource) {
+        eventSource.close();
+      }
     };
-  }, [orgId]);
+  }, [orgId, isLoaded]);
 
   const getHeaders = async () => {
-    const token = await getToken({ template: 'synapse' });
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token || ''}`
+      'Authorization': `Bearer ${googleToken || ''}`
     };
   };
 
@@ -291,7 +339,8 @@ export default function App() {
         body: JSON.stringify({
           title: newTitle,
           description: newDesc,
-          tag: newTag
+          tag: newTag,
+          imageUrl: newIdeaImageUrl
         })
       });
 
@@ -299,6 +348,7 @@ export default function App() {
         setNewTitle('');
         setNewDesc('');
         setNewTag('Feature');
+        setNewIdeaImageUrl('');
         setSuccessMessage('Idea submitted successfully!');
         setErrorMessage(null);
         fetchIdeas();
@@ -313,6 +363,37 @@ export default function App() {
     } finally {
       const btn = (e.target as any).querySelector('button[type="submit"]');
       if (btn) btn.disabled = false;
+    }
+  };
+
+  const fetchPendingJoinRequests = async () => {
+    if (!orgId) return;
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/organizations/${orgId}/join-requests`, { headers });
+      if (res.ok) {
+        setPendingJoinRequests(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleJoinRequestAction = async (requestId: number, action: 'approve' | 'reject') => {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/organizations/${orgId}/join-requests/${requestId}/${action}`, {
+        method: 'POST',
+        headers
+      });
+      if (res.ok) {
+        setSuccessMessage(`Join request ${action}d successfully`);
+        fetchPendingJoinRequests();
+      } else {
+        setErrorMessage(await res.text());
+      }
+    } catch (e) {
+      setErrorMessage(`Failed to ${action} request`);
     }
   };
 
@@ -350,27 +431,25 @@ export default function App() {
     }
   };
 
-  const joinWorkspace = async (inviteCode: string) => {
+  const requestJoinWorkspace = async (orgId: string) => {
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${BACKEND_URL}/api/organizations/join`, {
+      const res = await fetch(`${BACKEND_URL}/api/organizations/join-requests`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ inviteCode })
+        body: JSON.stringify({ orgId })
       });
 
       if (res.ok) {
-        setSuccessMessage('Workspace joined successfully!');
+        setSuccessMessage('Join request submitted! An administrator will review your request.');
         setErrorMessage(null);
-        fetchActiveOrganizations();
-        fetchDbProfile();
       } else {
         const err = await res.text();
         setErrorMessage(err);
         setSuccessMessage(null);
       }
     } catch (e) {
-      setErrorMessage('Failed to join workspace.');
+      setErrorMessage('Failed to request join.');
       setSuccessMessage(null);
     }
   };
@@ -478,15 +557,18 @@ export default function App() {
         headers,
         body: JSON.stringify({
           content: content,
-          parentCommentId: parentId
+          parentCommentId: parentId,
+          imageUrl: isReply ? replyImageUrls[parentId!] : commentImageUrls[ideaId]
         })
       });
 
       if (res.ok) {
         if (isReply) {
           setReplyInputs(prev => ({ ...prev, [parentId!]: '' }));
+          setReplyImageUrls(prev => ({ ...prev, [parentId!]: '' }));
         } else {
           setCommentInputs(prev => ({ ...prev, [ideaId]: '' }));
+          setCommentImageUrls(prev => ({ ...prev, [ideaId]: '' }));
         }
         fetchComments(ideaId);
       } else {
@@ -536,6 +618,11 @@ export default function App() {
             <span>{new Date(comment.createdAt).toLocaleTimeString()}</span>
           </div>
           <p className="comment-text">{comment.content}</p>
+          {comment.imageUrl && (
+            <div style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+              <img src={getFullImageUrl(comment.imageUrl)} alt="Comment attachment" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }} />
+            </div>
+          )}
           <button 
             onClick={() => setShowReplyFormId(showReplyForm ? null : comment.id)}
             className="comment-reply-trigger"
@@ -577,8 +664,7 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Sign Out State */}
-      <SignedOut>
+      {!googleToken ? (
         <div className="welcome-container animate-fade-in" style={{ marginTop: '8rem' }}>
           <div className="welcome-icon-box">
             <Shield size={28} />
@@ -588,16 +674,23 @@ export default function App() {
             Access your secure, multi-tenant workspace. Google Single Sign-On and corporate credentials active.
           </p>
           
-          <SignInButton mode="modal">
-            <button className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '0.95rem' }}>
-              Sign In to Workspace
-            </button>
-          </SignInButton>
+          <GoogleLogin
+            onSuccess={credentialResponse => {
+              const token = credentialResponse.credential;
+              if (token) {
+                localStorage.setItem('google_jwt', token);
+                setGoogleToken(token);
+              }
+            }}
+            onError={() => {
+              console.log('Login Failed');
+            }}
+          />
         </div>
-      </SignedOut>
-
+      ) : (
+      <>
       {/* Signed In State */}
-      <SignedIn>
+      
         <header className="header">
           <div className="header-brand">
             <div className="brand-icon">
@@ -626,7 +719,23 @@ export default function App() {
               </div>
             )}
             
-            <UserButton afterSignOutUrl="/" />
+            
+            {dbUser?.profilePicUrl && (
+              <img src={getFullImageUrl(dbUser.profilePicUrl)} alt="Profile" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+            )}
+            <button className="btn btn-secondary" style={{ padding: '0.4rem 1rem' }} onClick={() => { googleLogout(); localStorage.removeItem('google_jwt'); setGoogleToken(null); setDbUser(null); }}>Logout</button>
+
+            <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', marginLeft: '0.5rem' }} onClick={() => setIsProfileModalOpen(true)}>Edit Profile</button>
+            {isProfileModalOpen && (
+              <ProfileEditModal 
+                onClose={() => setIsProfileModalOpen(false)}
+                onSave={handleProfileSave}
+                currentName={dbUser?.name || ''}
+                currentProfilePicUrl={getFullImageUrl(dbUser?.profilePicUrl)}
+                backendUrl={BACKEND_URL}
+                getHeaders={getHeaders}
+              />
+            )}
 
             <button 
               onClick={toggleTheme}
@@ -667,7 +776,6 @@ export default function App() {
               </div>
 
               <div className="dashboard-grid">
-                {/* Discovery Left column: Join Existing */}
                 <div className="card">
                   <h3 className="card-title"><Users size={18} /> Join Active Workspaces</h3>
                   {activeOrgs.length === 0 ? (
@@ -683,11 +791,11 @@ export default function App() {
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted-more)', wordBreak: 'break-all', display: 'block', marginTop: '0.2rem' }}>ID: {org.id}</span>
                           </div>
                           <button 
-                            onClick={() => joinWorkspace(org.inviteCode)}
+                            onClick={() => requestJoinWorkspace(org.id)}
                             className="btn btn-primary"
                             style={{ width: 'auto', padding: '0.4rem 1rem', fontSize: '0.75rem', flexShrink: 0 }}
                           >
-                            Join
+                            Request to Join
                           </button>
                         </div>
                       ))}
@@ -857,6 +965,12 @@ export default function App() {
                         <option value="Other">Other</option>
                       </select>
                     </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label">Attach Image (Max 10MB)</label>
+                      <ImageUploadButton onUploadSuccess={setNewIdeaImageUrl} backendUrl={BACKEND_URL} getHeaders={getHeaders} />
+                      {newIdeaImageUrl && <img src={newIdeaImageUrl} alt="Preview" style={{ marginTop: '0.5rem', maxHeight: '100px', borderRadius: '8px' }} />}
+                    </div>
 
                     <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
                       Publish Idea
@@ -885,6 +999,39 @@ export default function App() {
                             </button>
                             <button 
                               onClick={() => approveRequest(req.id)}
+                              className="btn btn-primary"
+                              style={{ width: 'auto', padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
+                            >
+                              Approve
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Join requests approval queue (only visible for workspace admin) */}
+                {activeRole === 'ADMIN' && pendingJoinRequests.length > 0 && (
+                  <div className="card">
+                    <h3 className="card-title" style={{ fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <Users size={14} /> Join Requests
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {pendingJoinRequests.map(req => (
+                        <div key={req.id} style={{ border: '1px solid var(--input-border)', background: 'var(--input-bg)', borderRadius: '10px', padding: '0.75rem' }}>
+                          <p style={{ fontWeight: '700', fontSize: '0.85rem' }}>{req.name}</p>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Email: {req.email}</span>
+                          <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.5rem', justifyContent: 'flex-end' }}>
+                            <button 
+                              onClick={() => handleJoinRequestAction(req.id, 'reject')}
+                              className="btn btn-secondary"
+                              style={{ width: 'auto', padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
+                            >
+                              Reject
+                            </button>
+                            <button 
+                              onClick={() => handleJoinRequestAction(req.id, 'approve')}
                               className="btn btn-primary"
                               style={{ width: 'auto', padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
                             >
@@ -968,8 +1115,15 @@ export default function App() {
                       </div>
 
                       {/* Title & description */}
+
                       <h3 className="idea-title">{idea.title}</h3>
                       <p className="idea-desc">{idea.description}</p>
+                      {idea.imageUrl && (
+                        <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+                          <img src={getFullImageUrl(idea.imageUrl)} alt="Idea attachment" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px' }} />
+                        </div>
+                      )}
+
 
                       {/* Footer interaction row */}
                       <div className="idea-card-footer">
@@ -1073,20 +1227,7 @@ export default function App() {
             </div>
           )}
         </main>
-      </SignedIn>
+      </>)}
     </div>
   );
 }
-
-// Responsive layout configuration verified.
-// Workspace hooks sorted.
-// SignIn spacing adjusted.
-// Responsive layout configuration verified.
-// Workspace hooks sorted.
-// SignIn spacing adjusted.
-// Responsive layout configuration verified.
-// Workspace hooks sorted.
-// SignIn spacing adjusted.
-// Responsive layout configuration verified.
-// Workspace hooks sorted.
-// SignIn spacing adjusted.

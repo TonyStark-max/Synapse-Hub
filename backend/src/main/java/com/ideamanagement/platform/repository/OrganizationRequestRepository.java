@@ -12,4 +12,5 @@ public interface OrganizationRequestRepository extends JpaRepository<Organizatio
     List<OrganizationRequest> findByStatus(String status);
     Optional<OrganizationRequest> findByOrgId(String orgId);
     List<OrganizationRequest> findByRequesterId(String requesterId);
+    List<OrganizationRequest> findByCompanyIdAndStatus(String companyId, String status);
 }

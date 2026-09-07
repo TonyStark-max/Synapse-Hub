@@ -69,10 +69,7 @@ public class UserService {
             } else if (orgId != null && user.getOrgId() != null && !orgId.equals(user.getOrgId())) {
                 throw new SecurityException("User is already assigned to a different organization and cannot switch.");
             }
-            if (!mappedRole.equals(user.getRole())) {
-                user.setRole(mappedRole);
-                changed = true;
-            }
+            // Do not overwrite user role from syncUser as it's managed internally now
             if (changed) {
                 user = userRepository.save(user);
             }
@@ -92,5 +89,29 @@ public class UserService {
 
     public User getUser(String userId) {
         return userRepository.findById(userId).orElse(null);
+    }
+
+    @Transactional
+    public User setCompany(String userId, String companyId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (user.getCompanyId() != null) {
+            throw new IllegalStateException("User already belongs to a company");
+        }
+        user.setCompanyId(companyId);
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateProfile(String userId, String name, String profilePicUrl) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (name != null && !name.trim().isEmpty()) {
+            user.setName(name);
+        }
+        if (profilePicUrl != null) {
+            user.setProfilePicUrl(profilePicUrl);
+        }
+        return userRepository.save(user);
     }
 }

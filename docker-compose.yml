@@ -12,8 +12,6 @@ services:
       POSTGRES_PASSWORD: idea_secure_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/src/main/resources/init-db.sql:/docker-entrypoint-initdb.d/1-init-db.sql
-      - ./backend/src/main/resources/add-requests-table.sql:/docker-entrypoint-initdb.d/2-add-requests-table.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U idea_app -d ideamanagement"]
       interval: 5s
@@ -31,10 +29,11 @@ services:
       DB_URL: jdbc:postgresql://db:5432/ideamanagement
       DB_USERNAME: idea_app
       DB_PASSWORD: idea_secure_password
-      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-http://localhost:8080/api/mock-jwks}
-      CLERK_MOCK: ${CLERK_MOCK:-true}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-admin@example.com}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+    volumes:
+      - backend_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -44,7 +43,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-pk_test_dummy}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
         VITE_BACKEND_URL: http://localhost:8080
         VITE_SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL:-admin@example.com}
     container_name: synapse-frontend
@@ -55,6 +54,7 @@ services:
 
 volumes:
   postgres_data:
+  backend_uploads:
 
 # Database coordination configuration verified.
 # Database coordination configuration verified.

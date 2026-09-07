@@ -119,7 +119,7 @@ public class SecurityAndFeatureTests {
                 .andExpect(jsonPath("$.orgId", is("org_A")));
 
         // 2. Submit an idea in Org B
-        Idea ideaB = ideaService.submitIdea("Org B Core Idea", "This is secret for Org B.", "Design", "org_B", "user_admin_B");
+        Idea ideaB = ideaService.submitIdea("Org B Core Idea", "This is secret for Org B.", "Design", "org_B", "user_admin_B", null);
 
         // 3. Query ideas as Org A user: verify Org B's ideas are NOT visible
         mockMvc.perform(get("/api/ideas")
@@ -158,7 +158,7 @@ public class SecurityAndFeatureTests {
     @Test
     public void testPrivilegeEscalation() throws Exception {
         // Create an idea under Org A
-        Idea idea = ideaService.submitIdea("Security Validation", "Testing access controls.", "Improvement", "org_A", "user_admin_A");
+        Idea idea = ideaService.submitIdea("Security Validation", "Testing access controls.", "Improvement", "org_A", "user_admin_A", null);
 
         // Attempt status change as non-admin (MEMBER role) -> should return 403 Forbidden
         mockMvc.perform(put("/api/ideas/" + idea.getId() + "/status")
@@ -240,8 +240,8 @@ public class SecurityAndFeatureTests {
     @Test
     public void testHotScoreCalculationAndSorting() throws Exception {
         // We submit two ideas: Idea 1 (less votes) and Idea 2 (more votes)
-        Idea idea1 = ideaService.submitIdea("Idea One", "First idea.", "Feature", "org_A", "user_member_A");
-        Idea idea2 = ideaService.submitIdea("Idea Two", "Second idea.", "Design", "org_A", "user_member_B");
+        Idea idea1 = ideaService.submitIdea("Idea One", "First idea.", "Feature", "org_A", "user_member_A", null);
+        Idea idea2 = ideaService.submitIdea("Idea Two", "Second idea.", "Design", "org_A", "user_member_B", null);
 
         // Vote on Idea 2 to make it more popular (hotter)
         ideaService.voteIdea(idea2.getId(), "user_voter_1", "org_A", "UP");

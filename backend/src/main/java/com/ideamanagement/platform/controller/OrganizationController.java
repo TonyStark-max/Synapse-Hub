@@ -99,8 +99,59 @@ public class OrganizationController {
 
     // Endpoint to get all active organizations
     @GetMapping("/active")
-    public ResponseEntity<?> getActiveOrganizations() {
-        return ResponseEntity.ok(organizationService.getAllOrganizations());
+    public ResponseEntity<?> getActiveOrganizations(JwtAuthenticationToken token) {
+        return ResponseEntity.ok(organizationService.getPublicActiveOrganizations());
+    }
+
+    @PostMapping("/join-requests")
+    public ResponseEntity<?> requestToJoin(
+            JwtAuthenticationToken token,
+            @RequestBody Map<String, String> body) {
+        
+        String orgId = body.get("orgId");
+        if (orgId == null || orgId.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("orgId is required");
+        }
+
+        String userId = token.getToken().getSubject();
+        String email = token.getToken().getClaimAsString("email");
+        String userName = token.getToken().getClaimAsString("name");
+
+        try {
+            return ResponseEntity.ok(organizationService.requestToJoin(orgId, userId, email, userName));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/{orgId}/join-requests")
+    public ResponseEntity<?> getPendingJoinRequests(
+            @PathVariable String orgId,
+            JwtAuthenticationToken token) {
+        String adminId = token.getToken().getSubject();
+        return ResponseEntity.ok(organizationService.getPendingJoinRequests(orgId, adminId));
+    }
+
+    @PostMapping("/{orgId}/join-requests/{requestId}/approve")
+    public ResponseEntity<?> approveJoinRequest(
+            @PathVariable String orgId,
+            @PathVariable Long requestId,
+            JwtAuthenticationToken token) {
+        String adminId = token.getToken().getSubject();
+        organizationService.approveJoinRequest(requestId, adminId, orgId);
+        return ResponseEntity.ok(Map.of("message", "Request approved"));
+    }
+
+    @PostMapping("/{orgId}/join-requests/{requestId}/reject")
+    public ResponseEntity<?> rejectJoinRequest(
+            @PathVariable String orgId,
+            @PathVariable Long requestId,
+            JwtAuthenticationToken token) {
+        String adminId = token.getToken().getSubject();
+        organizationService.rejectJoinRequest(requestId, adminId, orgId);
+        return ResponseEntity.ok(Map.of("message", "Request rejected"));
     }
 
     // Submit a request to create a workspace
