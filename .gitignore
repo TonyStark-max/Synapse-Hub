@@ -1,6 +1,5 @@
 # Spring Boot / Maven
 backend/target/
-backend/.mvn/
 backend/*.jar
 backend/*.war
 
