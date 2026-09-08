@@ -41,7 +41,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Allow public access to Swagger UI, API docs, and invite code check
-                .requestMatchers("/api/organizations/invite/**", "/uploads/**").permitAll()
+                .requestMatchers("/api/organizations/invite/**", "/uploads/**", "/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
